@@ -380,3 +380,119 @@ for png_file in tqdm(png_files, desc="Processing images"):
         continue
 
 print("Processing complete!")
+
+#### ltxv 2B multiple condition demo 
+import torch # optional (need torch, diffusers to work; pip install torch, diffusers)
+#import gradio as gr # optional (need gradio for lazy ui; pip install gradio)
+from diffusers.pipelines.ltx.pipeline_ltx_condition import LTXConditionPipeline, LTXVideoCondition
+from diffusers import GGUFQuantizationConfig, LTXVideoTransformer3DModel
+from diffusers.utils import export_to_video
+from transformers import T5EncoderModel
+
+model_path = "https://huggingface.co/calcuis/ltxv-gguf/blob/main/ltxv-2b-0.9.6-distilled-fp32-q8_0.gguf"
+#model_path = "https://huggingface.co/calcuis/ltxv-gguf/blob/main/ltxv-13b-0.9.7-distilled-fp32-q4_0.gguf"
+#model_path = "https://huggingface.co/calcuis/ltxv-gguf/blob/main/ltxv-13b-0.9.7-dev-fp32-q4_0.gguf"
+transformer = LTXVideoTransformer3DModel.from_single_file(
+    model_path,
+    quantization_config=GGUFQuantizationConfig(compute_dtype=torch.bfloat16),
+    torch_dtype=torch.bfloat16,
+    #config = "cfg097.json"
+)
+text_encoder = T5EncoderModel.from_pretrained(
+    "calcuis/ltxv-gguf",
+    gguf_file="t5xxl_fp16-q4_0.gguf",
+    torch_dtype=torch.bfloat16,
+)
+pipe = LTXConditionPipeline.from_pretrained(
+    "callgg/ltxv0.9.6-decoder",
+    #"callgg/ltxv0.9.7-decoder",
+    transformer=transformer,
+    text_encoder=text_encoder,
+    torch_dtype=torch.bfloat16,
+).to("cuda")
+#pipe.enable_sequential_cpu_offload()
+
+#### pip install imageio imageio-ffmpeg
+from diffusers.utils import export_to_video, load_video, load_image
+# Load input image and video
+video = load_video(
+    "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cosmos/cosmos-video2world-input-vid.mp4"
+)
+image = load_image(
+    "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/diffusers/cosmos/cosmos-video2world-input.jpg"
+)
+len(video)
+
+# Create conditioning objects
+condition1 = LTXVideoCondition(
+    image=image,
+    frame_index=0,
+)
+condition2 = LTXVideoCondition(
+    video=video,
+    #image=video[0],
+    frame_index=80,
+)
+
+prompt = "The video depicts a long, straight highway stretching into the distance, flanked by metal guardrails. The road is divided into multiple lanes, with a few vehicles visible in the far distance. The surrounding landscape features dry, grassy fields on one side and rolling hills on the other. The sky is mostly clear with a few scattered clouds, suggesting a bright, sunny day. And then the camera switch to a winding mountain road covered in snow, with a single vehicle traveling along it. The road is flanked by steep, rocky cliffs and sparse vegetation. The landscape is characterized by rugged terrain and a river visible in the distance. The scene captures the solitude and beauty of a winter drive through a mountainous region."
+negative_prompt = "worst quality, inconsistent motion, blurry, jittery, distorted"
+
+# Generate video
+generator = torch.Generator("cuda").manual_seed(0)
+# Text-only conditioning is also supported without the need to pass `conditions`
+video = pipe(
+    conditions=[condition1, condition2],
+    prompt=prompt,
+    negative_prompt=negative_prompt,
+    width=768,
+    height=512,
+    num_frames=161,
+    num_inference_steps=40,
+    generator=generator,
+).frames[0]
+
+export_to_video(video, "output.mp4", fps=24)
+
+vid0 = load_video("2.mp4")[:9]
+vid1 = load_video("0.mp4")[:9]
+vid2 = load_video("5.mp4")[:9]
+
+# Create conditioning objects
+condition1 = LTXVideoCondition(
+    video=vid0,
+    frame_index=0,
+)
+condition2 = LTXVideoCondition(
+    video=vid1,
+    #image=video[0],
+    frame_index=40,
+)
+condition3 = LTXVideoCondition(
+    video=vid2,
+    #image=video[0],
+    frame_index=80,
+)
+
+prompt = '''
+As the golden hues of dusk melted into the indigo embrace of night, a lone boy sat strumming his guitar. The fading light painted his silhouette against the amber sky, his fingers dancing over the strings in a melody that seemed to slow time itself. Shadows lengthened around him as the sun dipped below the horizon, and one by one, stars flickered to life above.
+The warm glow of streetlights gradually replaced the sun’s farewell, casting a soft halo around him. His music, once bright and hopeful, now carried the deeper resonance of the night—a quiet introspection woven into every chord. The world around him darkened, but the rhythm of his guitar remained, a steady pulse beneath the rising moon.
+By the time the sky had deepened to velvet black, his song had transformed with it—slower, richer, echoing into the stillness. The boy played on, his notes blending with the whispers of the evening breeze, as if the night itself had become his audience.
+'''
+
+negative_prompt = "worst quality, inconsistent motion, blurry, jittery, distorted"
+
+# Generate video
+generator = torch.Generator("cuda").manual_seed(0)
+# Text-only conditioning is also supported without the need to pass `conditions`
+video = pipe(
+    conditions=[condition1, condition2, condition3],
+    prompt=prompt,
+    negative_prompt=negative_prompt,
+    width=768,
+    height=512,
+    num_frames=161,
+    num_inference_steps=40,
+    generator=generator,
+).frames[0]
+
+export_to_video(video, "output.mp4", fps=24)
