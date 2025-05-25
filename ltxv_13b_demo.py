@@ -227,31 +227,41 @@ sample_prompts = [[x] for x in sample_prompts]
 block = gr.Blocks(title="gguf").queue()
 with block:
     gr.Markdown("## 🎥 Video Generator (i2v)")
-    with gr.Column():
-        with gr.Row():
-            input_image = gr.Image(type="pil", label="Upload Image")
-        prompt = gr.Textbox(label="Prompt", placeholder="Enter your prompt here (or click Sample Prompt)", value="")
-        negative_prompt = gr.Textbox(label="Negative Prompt", value="worst quality, inconsistent motion, blurry, jittery, distorted", visible=False) # disable
-        quick_prompts = gr.Dataset(samples=sample_prompts, label='Sample Prompt', samples_per_page=1000, components=[prompt])
-        quick_prompts.click(lambda x: x[0], inputs=[quick_prompts], outputs=prompt, show_progress=False, queue=False)
-        with gr.Row():
-            width = gr.Number(label="Width", value=832)
-            height = gr.Number(label="Height", value=480)
-            num_frames = gr.Number(label="Num Frames", value=81)
-            num_inference_steps = gr.Number(label="Num Inference Steps", value=25)
-            fps = gr.Number(label="FPS", value=24)
-        generate_btn = gr.Button("Generate")
-    with gr.Column():
-        output_video = gr.Video(label="Generated Video")
+    with gr.Row():  # 新增行容器
+        # 左侧列容器（图片和参数设置）
+        with gr.Column(scale=1, min_width=600):  # 设置比例和最小宽度
+            with gr.Row():
+                input_image = gr.Image(type="pil", label="Upload Image")
+            with gr.Column():  # 参数设置容器
+                prompt = gr.Textbox(label="Prompt", placeholder="Enter your prompt here...", value="")
+                negative_prompt = gr.Textbox(visible=False)
+                quick_prompts = gr.Dataset(samples=sample_prompts, label='Sample Prompt', components=[prompt])
+                
+                # 参数网格布局
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        width = gr.Number(label="Width", value=832)
+                        height = gr.Number(label="Height", value=480)
+                    with gr.Column(scale=1):
+                        num_frames = gr.Number(label="Num Frames", value=81)
+                        num_inference_steps = gr.Number(label="Steps", value=25)
+                    fps = gr.Number(label="FPS", value=24)
+                
+                generate_btn = gr.Button("Generate", variant="primary")
 
+        # 右侧列容器（视频输出）
+        with gr.Column(scale=2, min_width=800):  # 放大右侧比例
+            output_video = gr.Video(label="Generated Video", height=480)
+    
+    # 事件绑定保持不变
+    quick_prompts.click(lambda x: x[0], inputs=[quick_prompts], outputs=prompt, show_progress=False, queue=False)
     generate_btn.click(
         fn=generate_video,
         inputs=[input_image, prompt, negative_prompt, width, height, num_frames, num_inference_steps, fps],
         outputs=output_video,
     )
 
-block.launch(share = True)
-
+block.launch(share=True)
 vim run_ltxv.py
 
 import os
