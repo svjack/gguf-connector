@@ -506,3 +506,37 @@ video = pipe(
 ).frames[0]
 
 export_to_video(video, "output.mp4", fps=24)
+
+
+import torch
+from diffusers import LTXConditionPipeline, LTXLatentUpsamplePipeline
+from diffusers.utils import export_to_video
+
+from transformers import T5EncoderModel
+text_encoder = T5EncoderModel.from_pretrained("google/t5-v1_1-xxl")  # 或指定其他预训练模型[1,3](@ref)
+
+# Load base model and LoRA weights
+pipe = LTXConditionPipeline.from_single_file(
+    "ltxv-2b-0.9.6-dev-04-25.safetensors",
+    text_encoder = text_encoder,
+    #torch_dtype=torch.bfloat16
+)
+#pipe.load_lora_weights("outputs/LTXV_2B_096_DEV_Lelouch_lora/checkpoints/lora_weights_step_09500.safetensors")
+#pipe.enable_sequential_cpu_offload()
+prompt = "In the style of Code Geass , The video features a sequence of images depicting an animated character with dark hair and purple eyes. The character is wearing a light-colored shirt and appears to be climbing or hanging onto a rocky surface. The background consists of natural elements such as rocks and greenery, suggesting an outdoor setting. The character's facial expressions change from determination to concern, indicating the difficulty of the climb. The lighting in the scene suggests it might be daytime."
+negative_prompt = "worst quality, inconsistent motion, blurry, jittery, distorted"
+num_frames = 121  # ~5 seconds at 24fps
+
+# 1. Initial generation at low resolution
+latents = pipe(
+        conditions= None,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
+        width=832,
+        height=480,
+        num_frames=num_frames,
+        num_inference_steps=30,
+        generator=torch.Generator().manual_seed(0),
+        output_type="pil",
+    ).frames
+export_to_video(latents[0], "output.mp4", fps=24)
